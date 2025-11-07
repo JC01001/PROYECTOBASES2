@@ -1,0 +1,13 @@
+[{
+  "_id": {
+    "$oid": "690e6973fc47033e857558b0"
+  },
+  "name": "pepe pecas",
+  "text": "esta muy bueno yo lo hice para mis ijos",
+  "article_id": {
+    "$oid": "690e68f8fc47033e857558ae"
+  },
+  "user_id": {
+    "$oid": "690e67d3fc47033e857558a8"
+  }
+}]

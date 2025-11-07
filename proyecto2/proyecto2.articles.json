@@ -1,0 +1,23 @@
+[{
+  "_id": {
+    "$oid": "690e68f8fc47033e857558ae"
+  },
+  "title": "Receta de pastel de chocolate casero",
+  "date": {
+    "$date": "2025-11-07T00:00:00.000Z"
+  },
+  "text": "receta muy rica de pastel con un sabor casero",
+  "user_id": {
+    "$oid": "690e67d3fc47033e857558a8"
+  },
+  "categories": [
+    {
+      "$oid": "690e6840fc47033e857558ac"
+    }
+  ],
+  "tags": [
+    {
+      "$oid": "690e6855fc47033e857558ad"
+    }
+  ]
+}]
