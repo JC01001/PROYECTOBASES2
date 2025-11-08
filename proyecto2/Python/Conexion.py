@@ -1,49 +1,60 @@
-from pymongo import MongoClient
-from tkinter import messagebox
-import sys
+from pymongo import MongoClient 
+from tkinter import messagebox 
+import sys 
 
-# Define la URL de conexión
-MONGO_URL = "mongodb://localhost:27017/"
+# --- Configuración de la Conexión ---
+# Define la URL de conexión al servidor de MongoDB (por defecto: localhost:27017).
+MONGO_URL = "mongodb://localhost:27017/" 
+# Define el nombre de la base de datos que se va a utilizar.
 DB_NAME = "Blog_Recetas"
 
-class MongoDBConnection:
+class ConexionMongoDB:
     """Clase para gestionar la conexión a MongoDB y el objeto de la base de datos."""
     
-    def __init__(self, root=None):
+    def __init__(self, raiz=None):
         """
         Inicializa la conexión.
-        root es opcional, se usa para mostrar errores de TKinter y salir de la app.
+        'raiz' es un parámetro opcional (una ventana de Tkinter) para manejar 
+        errores de conexión de forma gráfica. Si se proporciona, muestra un error y sale de la app.
         """
-        self.client = None
-        self.db = None
+        self.cliente = None # Inicializa el cliente de MongoDB a None.
+        self.db = None      # Inicializa el objeto de la base de datos a None.
         
         try:
-            self.client = MongoClient(MONGO_URL)
-            # Prueba la conexión para asegurar que las credenciales son válidas
-            self.client.admin.command('ping') 
-            self.db = self.client[DB_NAME]
+            # Crea una instancia de MongoClient intentando conectarse a la URL definida.
+            self.cliente = MongoClient(MONGO_URL)
+            # Prueba la conexión con el comando 'ping' (petición rápida al servidor).
+            self.cliente.admin.command('ping') 
+            # Si el ping es exitoso, selecciona la base de datos específica.
+            self.db = self.cliente[DB_NAME]
             print("¡Conexión a MongoDB exitosa!")
             
         except Exception as e:
+            # Captura cualquier error de conexión (servidor apagado, URL incorrecta, etc.).
             error_msg = f"Error al conectar a MongoDB en {MONGO_URL}: {e}"
             print(error_msg)
             
-            if root:
-                # Si se proporciona la raíz de la GUI, muestra un error y sale
+            if raiz:
+                # Si se llamó desde una GUI (ej: Login.py), muestra una advertencia gráfica.
                 messagebox.showerror("Error de Conexión", error_msg)
-                root.quit()
+                # Sale de la aplicación de la GUI.
+                raiz.quit()
             else:
-                # Si no hay GUI, sale del script
+                # Si no hay GUI (ej: se importa en Logica.py), sale del script con un código de error.
                 sys.exit(1)
 
-    def get_db(self):
+    def obtener_db(self):
         """Retorna el objeto de la base de datos (db)."""
         return self.db
 
-# Una instancia para usar en otros módulos
+# --- Configuración de Instancia Global ---
+# Este bloque garantiza que la conexión se intente una vez al cargar el módulo.
 try:
-    db_manager = MongoDBConnection()
-    DB = db_manager.get_db()
+    # Intenta crear la conexión.
+    gestor_db = ConexionMongoDB()
+    # Almacena el objeto de la base de datos en la variable global DB.
+    DB = gestor_db.obtener_db()
 except:
-    # Si la conexión falla sin una raíz de Tkinter (e.g., al importar), DB será None
+    # Si la conexión falla (y no se proporcionó una raíz de GUI), DB se establece a None.
+    # Esto es manejado por los gestores en Logica.py.
     DB = None

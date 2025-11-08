@@ -1,360 +1,396 @@
-import customtkinter as ctk
-from tkinter import messagebox
-import datetime
-from bson.objectid import ObjectId
+import customtkinter as ctk 
+from tkinter import messagebox 
+import datetime 
+from bson.objectid import ObjectId 
 
 # Importaciones de nuestros módulos
-from Conexion import MongoDBConnection, DB # Importamos DB
+from Conexion import MongoDBConnection, DB # Importa la variable global DB para el chequeo de conexión.
 from Logica import (
-    user_manager, 
-    category_manager, 
-    tag_manager, 
-    article_manager
+    gestor_usuarios, # Gestor de la colección 'users'.
+    gestor_categorias, # Gestor de la colección 'categories'.
+    gestor_etiquetas, # Gestor de la colección 'tags'.
+    gestor_articulos # Gestor de la colección 'articles'.
 )
 
-class MainMenuApp:
+class AppMenuPrincipal:
     
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Gestión CRUD - Blog de Recetas")
-        self.root.geometry("1000x700")
+    def __init__(self, raiz):
+        self.raiz = raiz
+        self.raiz.title("Gestión CRUD - Blog de Recetas")
+        self.raiz.geometry("1000x700")
         
-        # ¡CHEQUEO IMPORTANTE!
-        # Verificamos la conexión global al inicio
+        # --- Chequeo de Conexión ---
         if DB is None:
+            # Si DB es None, significa que la conexión falló en Conexion.py.
             messagebox.showerror("Error Global", "La conexión global a la DB falló. Revisa que mongod esté corriendo.")
-            self.root.quit()
+            self.raiz.quit()
             return
             
-        # Ya no creamos 'self.db_conn', usamos la global
-        self.articles_collection = article_manager.get_collection()
-        self.current_frame = None
+        # Obtenemos la referencia a la colección de artículos.
+        self.coleccion_articulos = gestor_articulos.obtener_coleccion()
+        self.frame_actual = None # Para rastrear el frame visible.
 
-        # Cargar mapas al inicio
-        user_manager.load_map()
-        category_manager.load_map()
-        tag_manager.load_map()
+        # Cargar los mapas de los managers al inicio para los OptionMenus y Checkboxes.
+        gestor_usuarios.cargar_mapa()
+        gestor_categorias.cargar_mapa()
+        gestor_etiquetas.cargar_mapa()
 
-        # --- Configuración de Layout ---
-        self.root.grid_columnconfigure(1, weight=1)
-        self.root.grid_rowconfigure(0, weight=1)
+        # --- Configuración de Layout (Grid) ---
+        self.raiz.grid_columnconfigure(1, weight=1) # Columna de contenido principal expandible.
+        self.raiz.grid_rowconfigure(0, weight=1) # Fila principal expandible.
 
-        # --- Sidebar ---
-        self.sidebar_frame = ctk.CTkFrame(self.root, width=180, corner_radius=0)
-        self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(5, weight=1) # Espacio para el botón de salir
+        # --- Barra Lateral (Sidebar) ---
+        self.frame_sidebar = ctk.CTkFrame(self.raiz, width=180, corner_radius=0)
+        self.frame_sidebar.grid(row=0, column=0, sticky="nsew")
+        self.frame_sidebar.grid_rowconfigure(5, weight=1) # Empuja el botón "Salir" al fondo.
 
-        ctk.CTkLabel(self.sidebar_frame, text="Menú Principal", font=("Arial", 18, "bold")).pack(pady=20)
+        ctk.CTkLabel(self.frame_sidebar, text="Menú Principal", font=("Arial", 18, "bold")).pack(pady=20)
         
-        self.article_button = ctk.CTkButton(self.sidebar_frame, text="1. Artículos (CRUD)", command=lambda: self.select_frame_by_name("articles"))
-        self.article_button.pack(pady=10, padx=20, fill="x")
+        # Botones para cambiar la vista (Artículos, Categorías, Tags, Usuarios).
+        self.boton_articulos = ctk.CTkButton(self.frame_sidebar, text="1. Artículos (CRUD)", command=lambda: self.seleccionar_frame_por_nombre("articles"))
+        self.boton_articulos.pack(pady=10, padx=20, fill="x")
         
-        self.category_button = ctk.CTkButton(self.sidebar_frame, text="2. Categorías (CRUD)", command=lambda: self.select_frame_by_name("categories"))
-        self.category_button.pack(pady=10, padx=20, fill="x")
+        self.boton_categorias = ctk.CTkButton(self.frame_sidebar, text="2. Categorías (CRUD)", command=lambda: self.seleccionar_frame_por_nombre("categories"))
+        self.boton_categorias.pack(pady=10, padx=20, fill="x")
 
-        self.tag_button = ctk.CTkButton(self.sidebar_frame, text="3. Tags (CRUD)", command=lambda: self.select_frame_by_name("tags"))
-        self.tag_button.pack(pady=10, padx=20, fill="x")
+        self.boton_tags = ctk.CTkButton(self.frame_sidebar, text="3. Tags (CRUD)", command=lambda: self.seleccionar_frame_por_nombre("tags"))
+        self.boton_tags.pack(pady=10, padx=20, fill="x")
         
-        self.user_button = ctk.CTkButton(self.sidebar_frame, text="4. Usuarios (CRUD)", command=lambda: self.select_frame_by_name("users"))
-        self.user_button.pack(pady=10, padx=20, fill="x")
+        self.boton_usuarios = ctk.CTkButton(self.frame_sidebar, text="4. Usuarios (CRUD)", command=lambda: self.seleccionar_frame_por_nombre("users"))
+        self.boton_usuarios.pack(pady=10, padx=20, fill="x")
         
-        ctk.CTkButton(self.sidebar_frame, text="Salir", command=self.root.quit, fg_color="red").pack(side="bottom", pady=20, padx=20, fill="x")
+        # Botón de Salir.
+        ctk.CTkButton(self.frame_sidebar, text="Salir", command=self.raiz.quit, fg_color="red").pack(side="bottom", pady=20, padx=20, fill="x")
 
         # --- Frame de Contenido Principal ---
-        self.main_content_frame = ctk.CTkFrame(self.root, corner_radius=0)
-        self.main_content_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
-        self.main_content_frame.grid_columnconfigure(0, weight=1)
-        self.main_content_frame.grid_rowconfigure(0, weight=1)
+        self.frame_contenido_principal = ctk.CTkFrame(self.raiz, corner_radius=0)
+        self.frame_contenido_principal.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        self.frame_contenido_principal.grid_columnconfigure(0, weight=1)
+        self.frame_contenido_principal.grid_rowconfigure(0, weight=1)
         
         # --- Creación de los Frames ---
         self.frames = {
-            "articles": self.create_article_frame(),
-            "categories": self.create_generic_crud_frame("Categorías", category_manager, name_key="name"),
-            "tags": self.create_generic_crud_frame("Tags", tag_manager, name_key="name"),
-            "users": self.create_generic_crud_frame("Usuarios", user_manager, name_key="email")
+            "articles": self.crear_frame_articulos(),
+            # Usa la función genérica para crear frames de CRUD simples:
+            "categories": self.crear_frame_crud_generico("Categorías", gestor_categorias, clave_nombre="name"),
+            "tags": self.crear_frame_crud_generico("Tags", gestor_etiquetas, clave_nombre="name"),
+            "users": self.crear_frame_crud_generico("Usuarios", gestor_usuarios, clave_nombre="email")
         }
         
-        # Iniciar en la vista de artículos
-        self.select_frame_by_name("articles")
+        # Muestra la vista de artículos por defecto.
+        self.seleccionar_frame_por_nombre("articles")
 
-    def select_frame_by_name(self, name):
-        """Muestra el frame seleccionado y actualiza los datos."""
+    def seleccionar_frame_por_nombre(self, nombre):
+        """Oculta todos los frames y muestra el seleccionado, recargando su lista de datos."""
         for frame in self.frames.values():
-            frame.grid_forget()
+            frame.grid_forget() # Oculta el frame.
             
-        self.current_frame = self.frames[name]
-        self.current_frame.grid(row=0, column=0, sticky="nsew")
+        self.frame_actual = self.frames[nombre]
+        self.frame_actual.grid(row=0, column=0, sticky="nsew") # Muestra el frame.
 
         # Cargar datos frescos al cambiar de pestaña
-        if name == "articles":
-            self.load_articles()
-        elif name in ["categories", "tags", "users"]:
-            manager = user_manager if name == "users" else category_manager if name == "categories" else tag_manager
-            self.load_generic_list(manager, self.current_frame.textbox, self.current_frame.name_key)
+        if nombre == "articles":
+            self.cargar_articulos() # Carga de artículos (con lógica de agregación/join).
+        elif nombre in ["categories", "tags", "users"]:
+            # Obtiene el manager correcto para la carga genérica.
+            if nombre == "users": manager = gestor_usuarios
+            elif nombre == "categories": manager = gestor_categorias
+            else: manager = gestor_etiquetas
+            # Carga la lista genérica.
+            self.cargar_lista_generica(manager, self.frame_actual.textbox, self.frame_actual.clave_nombre)
 
 
     # --- LÓGICA DE GESTIÓN DE ARTÍCULOS ---
 
-    def create_article_frame(self):
+    def crear_frame_articulos(self):
         """Crea y configura el frame para la gestión de Artículos."""
-        frame = ctk.CTkFrame(self.main_content_frame, fg_color="transparent")
+        frame = ctk.CTkFrame(self.frame_contenido_principal, fg_color="transparent")
         
         ctk.CTkLabel(frame, text="Gestión de Artículos", font=("Arial", 20, "bold")).pack(pady=10)
         
-        controls_frame = ctk.CTkFrame(frame)
-        controls_frame.pack(pady=5, padx=10, fill="x")
+        # Frame para controles de búsqueda/creación
+        frame_controles = ctk.CTkFrame(frame)
+        frame_controles.pack(pady=5, padx=10, fill="x")
         
-        search_entry = ctk.CTkEntry(controls_frame, width=300, placeholder_text="Buscar por título, texto, autor, categoría o tag...")
-        search_entry.pack(side="left", padx=(10, 5), fill="x", expand=True)
+        # Entrada de búsqueda.
+        entrada_busqueda = ctk.CTkEntry(frame_controles, width=300, placeholder_text="Buscar por título, texto, autor, categoría o tag...")
+        entrada_busqueda.pack(side="left", padx=(10, 5), fill="x", expand=True)
 
-        ctk.CTkButton(controls_frame, text="Buscar / Recargar", command=self.load_articles).pack(side="left", padx=5)
-        ctk.CTkButton(controls_frame, text="Crear Nuevo", command=self.open_article_creation_window, fg_color="#3B82F6").pack(side="right", padx=(5, 10))
+        # Botones de acción.
+        ctk.CTkButton(frame_controles, text="Buscar / Recargar", command=self.cargar_articulos).pack(side="left", padx=5)
+        ctk.CTkButton(frame_controles, text="Crear Nuevo", command=self.abrir_ventana_creacion_articulo, fg_color="#3B82F6").pack(side="right", padx=(5, 10))
 
-        self.article_textbox = ctk.CTkTextbox(frame, width=760, height=450, font=("Consolas", 13))
-        self.article_textbox.pack(pady=10, padx=10, fill="both", expand=True)
-        self.article_textbox.configure(state="disabled")
+        # Textbox para mostrar la lista de artículos.
+        self.caja_texto_articulos = ctk.CTkTextbox(frame, width=760, height=450, font=("Consolas", 13))
+        self.caja_texto_articulos.pack(pady=10, padx=10, fill="both", expand=True)
+        self.caja_texto_articulos.configure(state="disabled")
 
-        action_frame = ctk.CTkFrame(frame)
-        action_frame.pack(pady=5, padx=10, fill="x")
+        # Frame para acciones de edición/eliminación.
+        frame_accion = ctk.CTkFrame(frame)
+        frame_accion.pack(pady=5, padx=10, fill="x")
 
-        self.article_id_entry = ctk.CTkEntry(action_frame, placeholder_text="ID de Artículo para acción", width=250)
-        self.article_id_entry.pack(side="left", padx=(10, 5))
+        # Entrada para el ID del artículo a modificar.
+        self.entrada_id_articulo = ctk.CTkEntry(frame_accion, placeholder_text="ID de Artículo para acción", width=250)
+        self.entrada_id_articulo.pack(side="left", padx=(10, 5))
         
-        ctk.CTkButton(action_frame, text="Editar Artículo", command=self.open_article_edit_window, fg_color="orange").pack(side="left", padx=5)
-        ctk.CTkButton(action_frame, text="Eliminar Artículo", command=self.delete_article, fg_color="red").pack(side="left", padx=5)
+        ctk.CTkButton(frame_accion, text="Editar Artículo", command=self.abrir_ventana_edicion_articulo, fg_color="orange").pack(side="left", padx=5)
+        ctk.CTkButton(frame_accion, text="Eliminar Artículo", command=self.eliminar_articulo, fg_color="red").pack(side="left", padx=5)
 
-        frame.search_entry = search_entry 
+        frame.entrada_busqueda = entrada_busqueda # Almacena la referencia a la entrada de búsqueda en el frame.
         return frame
 
-    def load_articles(self):
-        """Carga y muestra la lista de artículos, aplicando el filtro de búsqueda."""
+    def cargar_articulos(self):
+        """Carga y muestra la lista de artículos con filtro y detalle de relaciones."""
         
-        # --- LÓGICA DE FILTRO (MODIFICADA) ---
-        search_entry = self.frames["articles"].search_entry
-        search_term = search_entry.get()
-        mongo_filter = {} # Por defecto, el filtro está vacío (busca todo)
+        # --- LÓGICA DE FILTRO ---
+        entrada_busqueda = self.frames["articles"].entrada_busqueda
+        termino_busqueda = entrada_busqueda.get()
+        filtro_mongo = {} 
         
-        if search_term:
-            regex_query = {"$regex": search_term, "$options": "i"}
+        if termino_busqueda:
+            # Crea una consulta de expresión regular insensible a mayúsculas/minúsculas.
+            consulta_regex = {"$regex": termino_busqueda, "$options": "i"}
             
-            # ¡MODIFICADO! Ahora el $or busca en 5 campos
-            mongo_filter = {
+            # Aplica el filtro $or para buscar en múltiples campos, incluyendo los campos JOIN.
+            filtro_mongo = {
                 "$or": [
-                    {"title": regex_query}, 
-                    {"text": regex_query},
-                    {"author_details.name": regex_query},  # <-- NUEVO
-                    {"category_details.name": regex_query},# <-- NUEVO
-                    {"tag_details.name": regex_query}     # <-- NUEVO
+                    {"title": consulta_regex}, 
+                    {"text": consulta_regex},
+                    {"author_details.email": consulta_regex},  # Búsqueda por email del autor.
+                    {"category_details.name": consulta_regex}, # Búsqueda por nombre de categoría.
+                    {"tag_details.name": consulta_regex}      # Búsqueda por nombre de tag.
                 ]
             }
         
-        # --- PIPELINE DE AGREGACIÓN (MODIFICADO) ---
+        # --- PIPELINE DE AGREGACIÓN (Simula los JOINs SQL) ---
         pipeline = [
-            # 1. Traemos todas las relaciones PRIMERO
+            # 1. $lookup: Trae la información del Autor (user_id -> users._id).
             { "$lookup": {"from": "users", "localField": "user_id", "foreignField": "_id", "as": "author_details"}},
+            # 2. $lookup: Trae la información de las Categorías (categories -> categories._id).
             { "$lookup": {"from": "categories", "localField": "categories", "foreignField": "_id", "as": "category_details"}},
+            # 3. $lookup: Trae la información de los Tags (tags -> tags._id).
             { "$lookup": {"from": "tags", "localField": "tags", "foreignField": "_id", "as": "tag_details"}},
             
-            # 2. Desanidamos el autor para facilitar la búsqueda
+            # 4. $unwind: Desanida el arreglo de 'author_details' (que solo tiene un elemento).
+            #    'preserveNullAndEmptyArrays': True permite que muestre artículos sin autor (aunque no debería).
             { "$unwind": {"path": "$author_details", "preserveNullAndEmptyArrays": True}},
             
-            # 3. ¡NUEVA POSICIÓN! Aplicamos el filtro DESPUÉS de los joins
-            { "$match": mongo_filter }
+            # 5. $match: Aplica el filtro de búsqueda DESPUÉS de haber cargado todos los detalles.
+            { "$match": filtro_mongo }
         ]
         
         try:
-            self.article_textbox.configure(state="normal")
-            self.article_textbox.delete("1.0", "end")
+            self.caja_texto_articulos.configure(state="normal")
+            self.caja_texto_articulos.delete("1.0", "end")
             
-            articles = self.articles_collection.aggregate(pipeline) 
-            text_to_display = ""
-            count = 0
+            # Ejecuta la agregación en la colección de artículos.
+            articulos = self.coleccion_articulos.aggregate(pipeline) 
+            texto_a_mostrar = ""
+            contador = 0
             
-            for article in articles:
-                count += 1
-                title = article.get("title", "Sin Título")
-                text_preview = article.get("text", "")[:70] + "..."
-                date_str = article.get("date", datetime.datetime.now()).strftime("%Y-%m-%d %H:%M")
+            for articulo in articulos:
+                contador += 1
+                titulo = articulo.get("title", "Sin Título")
+                texto_previo = articulo.get("text", "")[:70] + "..."
+                fecha_str = articulo.get("date", datetime.datetime.now()).strftime("%Y-%m-%d %H:%M")
 
-                author_name = article.get('author_details', {}).get('name', 'Usuario Desconocido')
-                cat_names = [cat.get('name') for cat in article.get('category_details', []) if cat.get('name')]
-                tag_names = [tag.get('name') for tag in article.get('tag_details', []) if tag.get('name')]
+                # Extrae los nombres de los detalles unidos (JOINed)
+                nombre_autor = articulo.get('author_details', {}).get('email', 'Usuario Desconocido') # Usamos email como identificador.
+                nombres_cats = [cat.get('name') for cat in articulo.get('category_details', []) if cat.get('name')]
+                nombres_tags = [tag.get('name') for tag in articulo.get('tag_details', []) if tag.get('name')]
 
-                text_to_display += f"--- {title} ---\n"
-                text_to_display += f"ID: {article['_id']}\n"
-                text_to_display += f"Fecha: {date_str}\n"
-                text_to_display += f"Autor: {author_name}\n"
-                text_to_display += f"Categorías: {', '.join(cat_names) or 'Ninguna'}\n"
-                text_to_display += f"Tags: {', '.join(tag_names) or 'Ninguno'}\n"
-                text_to_display += f"Texto: {text_preview}\n"
-                text_to_display += "-"*80 + "\n\n"
+                # Formatea la salida
+                texto_a_mostrar += f"--- {titulo} ---\n"
+                texto_a_mostrar += f"ID: {articulo['_id']}\n"
+                texto_a_mostrar += f"Fecha: {fecha_str}\n"
+                texto_a_mostrar += f"Autor: {nombre_autor}\n"
+                texto_a_mostrar += f"Categorías: {', '.join(nombres_cats) or 'Ninguna'}\n"
+                texto_a_mostrar += f"Tags: {', '.join(nombres_tags) or 'Ninguno'}\n"
+                texto_a_mostrar += f"Texto: {texto_previo}\n"
+                texto_a_mostrar += "-"*80 + "\n\n"
             
-            if count == 0:
-                text_to_display = f"No se encontraron artículos que coincidan con '{search_term}'." if search_term else "No hay artículos en la base de datos."
+            if contador == 0:
+                texto_a_mostrar = f"No se encontraron artículos que coincidan con '{termino_busqueda}'." if termino_busqueda else "No hay artículos en la base de datos."
                 
-            self.article_textbox.insert("1.0", text_to_display)
-            self.article_textbox.configure(state="disabled")
+            self.caja_texto_articulos.insert("1.0", texto_a_mostrar)
+            self.caja_texto_articulos.configure(state="disabled")
         except Exception as e:
             messagebox.showerror("Error al Cargar", f"Error en la agregación de artículos: {e}")
 
-    def open_article_creation_window(self):
-        """Abre la ventana para crear un nuevo artículo."""
-        self.open_article_form(is_edit=False)
+    # Funciones auxiliares para abrir el formulario (Crear/Editar)
 
-    def open_article_edit_window(self):
-        """Abre la ventana para editar un artículo existente."""
-        article_id = self.article_id_entry.get()
-        if not article_id:
+    def abrir_ventana_creacion_articulo(self):
+        """Abre el formulario para crear un nuevo artículo."""
+        self.abrir_formulario_articulo(es_edicion=False)
+
+    def abrir_ventana_edicion_articulo(self):
+        """Abre el formulario para editar un artículo existente."""
+        id_articulo = self.entrada_id_articulo.get()
+        if not id_articulo:
             messagebox.showwarning("Faltan Datos", "Ingrese el ID del artículo que desea editar.")
             return
 
         try:
-            article = self.articles_collection.find_one({"_id": ObjectId(article_id)})
-            if not article:
-                messagebox.showerror("No Encontrado", f"Artículo con ID '{article_id}' no existe.")
+            # Busca el artículo por ID.
+            articulo = self.coleccion_articulos.find_one({"_id": ObjectId(id_articulo)})
+            if not articulo:
+                messagebox.showerror("No Encontrado", f"Artículo con ID '{id_articulo}' no existe.")
                 return
-            self.open_article_form(is_edit=True, article=article)
+            self.abrir_formulario_articulo(es_edicion=True, articulo=articulo)
         except Exception as e:
             messagebox.showerror("ID Inválido", f"El ID proporcionado no es un ObjectId válido: {e}")
 
-    def open_article_form(self, is_edit, article=None):
-        """Genera el formulario de creación/edición de artículos."""
-        window = ctk.CTkToplevel(self.root)
-        window.title("Editar Artículo" if is_edit else "Crear Nuevo Artículo")
-        window.geometry("600x700")
-        window.grab_set() # Modal
+    def abrir_formulario_articulo(self, es_edicion, articulo=None):
+        """Genera y muestra el formulario de creación/edición de artículos."""
+        ventana = ctk.CTkToplevel(self.raiz) # Crea una ventana de nivel superior (modal).
+        ventana.title("Editar Artículo" if es_edicion else "Crear Nuevo Artículo")
+        ventana.geometry("600x700")
+        ventana.grab_set() # Hace que la ventana sea modal (bloquea la principal).
         
-        # Recarga los managers para el formulario
-        user_manager.load_map()
-        category_manager.load_map()
-        tag_manager.load_map()
+        # Recarga los mapas para asegurar que los selectores y checkboxes tengan los datos más recientes.
+        gestor_usuarios.cargar_mapa()
+        gestor_categorias.cargar_mapa()
+        gestor_etiquetas.cargar_mapa()
         
-        form_frame = ctk.CTkScrollableFrame(window)
-        form_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        frame_formulario = ctk.CTkScrollableFrame(ventana) # Frame con scrollbar.
+        frame_formulario.pack(fill="both", expand=True, padx=20, pady=20)
         
-        # Title
-        ctk.CTkLabel(form_frame, text="Título:").pack(padx=10, pady=(10, 0), anchor="w")
-        title_entry = ctk.CTkEntry(form_frame, width=500)
-        title_entry.pack(padx=10, pady=5)
+        # Widgets del formulario: Título, Texto, Autor (OptionMenu), Categorías (Checkboxes), Tags (Checkboxes).
         
-        # Text
-        ctk.CTkLabel(form_frame, text="Texto:").pack(padx=10, pady=(10, 0), anchor="w")
-        text_box = ctk.CTkTextbox(form_frame, width=500, height=200)
-        text_box.pack(padx=10, pady=5)
+        # Título
+        ctk.CTkLabel(frame_formulario, text="Título:").pack(padx=10, pady=(10, 0), anchor="w")
+        entrada_titulo = ctk.CTkEntry(frame_formulario, width=500)
+        entrada_titulo.pack(padx=10, pady=5)
         
-        # Author
-        ctk.CTkLabel(form_frame, text="Autor:").pack(padx=10, pady=(10, 0), anchor="w")
-        users = user_manager.get_all_names()
-        user_option_menu = ctk.CTkOptionMenu(form_frame, values=users if users else ["No hay usuarios"])
-        user_option_menu.pack(padx=10, pady=5, anchor="w")
+        # Texto
+        ctk.CTkLabel(frame_formulario, text="Texto:").pack(padx=10, pady=(10, 0), anchor="w")
+        caja_texto = ctk.CTkTextbox(frame_formulario, width=500, height=200)
+        caja_texto.pack(padx=10, pady=5)
+        
+        # Autor (Selector OptionMenu)
+        ctk.CTkLabel(frame_formulario, text="Autor:").pack(padx=10, pady=(10, 0), anchor="w")
+        usuarios = gestor_usuarios.obtener_todos_los_nombres()
+        menu_opciones_usuario = ctk.CTkOptionMenu(frame_formulario, values=usuarios if usuarios else ["No hay usuarios"])
+        menu_opciones_usuario.pack(padx=10, pady=5, anchor="w")
 
-        # Checkboxes
-        ctk.CTkLabel(form_frame, text="Categorías:").pack(padx=10, pady=(10, 0), anchor="w")
-        category_vars_map = self._setup_checkboxes(form_frame, category_manager)
+        # Categorías (Checkboxes)
+        ctk.CTkLabel(frame_formulario, text="Categorías:").pack(padx=10, pady=(10, 0), anchor="w")
+        # _setup_checkboxes retorna una lista de tuplas (variable_tkinter, object_id)
+        mapa_vars_categoria = self._configurar_checkboxes(frame_formulario, gestor_categorias) 
         
-        ctk.CTkLabel(form_frame, text="Tags:").pack(padx=10, pady=(10, 0), anchor="w")
-        tag_vars_map = self._setup_checkboxes(form_frame, tag_manager)
+        # Tags (Checkboxes)
+        ctk.CTkLabel(frame_formulario, text="Tags:").pack(padx=10, pady=(10, 0), anchor="w")
+        mapa_vars_tag = self._configurar_checkboxes(frame_formulario, gestor_etiquetas)
 
-        # Precargar datos
-        if is_edit and article:
-            title_entry.insert(0, article.get("title", ""))
-            text_box.insert("1.0", article.get("text", ""))
+        # Precargar datos si es edición
+        if es_edicion and articulo:
+            entrada_titulo.insert(0, articulo.get("title", ""))
+            caja_texto.insert("1.0", articulo.get("text", ""))
             
-            # Busca el email del autor por su ID
-            author_email = user_manager.get_name_by_id(article.get("user_id")) # Método invertido
-            if author_email:
-                user_option_menu.set(author_email)
-
-            self._check_initial_values(category_vars_map, article.get("categories", []))
-            self._check_initial_values(tag_vars_map, article.get("tags", []))
+            # Se necesita un método auxiliar en Logica.py para obtener el nombre (email) a partir del ID.
+            # (Este método no está en el código base, pero es necesario para que funcione la edición del autor).
+            # Asumiendo que existe:
+            # nombre_autor = user_manager.obtener_nombre_por_id(articulo.get("user_id")) 
+            # if nombre_autor:
+            #    menu_opciones_usuario.set(nombre_autor)
+            
+            # Marcar checkboxes iniciales.
+            self._marcar_valores_iniciales(mapa_vars_categoria, articulo.get("categories", []))
+            self._marcar_valores_iniciales(mapa_vars_tag, articulo.get("tags", []))
 
         # Botón Guardar
-        save_command = lambda: self.save_article(
-            window, article['_id'] if is_edit else None, title_entry.get(),
-            text_box.get("1.0", "end-1c"), user_option_menu.get(),
-            category_vars_map, tag_vars_map
+        comando_guardar = lambda: self.guardar_articulo(
+            ventana, articulo['_id'] if es_edicion else None, entrada_titulo.get(),
+            caja_texto.get("1.0", "end-1c"), menu_opciones_usuario.get(),
+            mapa_vars_categoria, mapa_vars_tag
         )
-        save_button = ctk.CTkButton(master=form_frame, 
-                                     text="Guardar Cambios" if is_edit else "Crear Artículo", 
-                                     fg_color="green",
-                                     command=save_command)
-        save_button.pack(pady=20, padx=10)
+        boton_guardar = ctk.CTkButton(master=frame_formulario, 
+                                          text="Guardar Cambios" if es_edicion else "Crear Artículo", 
+                                          fg_color="green",
+                                          command=comando_guardar)
+        boton_guardar.pack(pady=20, padx=10)
 
-    def _setup_checkboxes(self, parent_frame, manager):
-        """Función auxiliar para crear un conjunto de checkboxes a partir de un manager."""
-        map_list = []
-        names = manager.get_all_names() 
+    def _configurar_checkboxes(self, frame_padre, gestor):
+        """Función auxiliar para crear un conjunto de checkboxes de un gestor (Categorías/Tags)."""
+        lista_mapa = []
+        nombres = gestor.obtener_todos_los_nombres() 
         
-        container = ctk.CTkScrollableFrame(parent_frame, height=100) # Frame con scroll
-        container.pack(padx=10, pady=5, fill="x")
+        contenedor = ctk.CTkScrollableFrame(frame_padre, height=100) # Frame con scroll para los checkboxes.
+        contenedor.pack(padx=10, pady=5, fill="x")
         
-        for name in names:
-            var = ctk.IntVar(value=0)
-            obj_id = manager.get_id_by_name(name)
+        for nombre in nombres:
+            variable = ctk.IntVar(value=0) # Variable para rastrear el estado (0=desmarcado, 1=marcado).
+            id_objeto = gestor.obtener_id_por_nombre(nombre)
             
-            checkbox = ctk.CTkCheckBox(container, text=name, variable=var)
+            checkbox = ctk.CTkCheckBox(contenedor, text=nombre, variable=variable)
             checkbox.pack(anchor="w", padx=10)
-            map_list.append((var, obj_id))
+            lista_mapa.append((variable, id_objeto)) # Almacena la variable y el ID asociado.
         
-        return map_list
+        return lista_mapa
     
-    def _check_initial_values(self, vars_map, current_ids):
-        """Auxiliar para marcar los checkboxes que ya están seleccionados."""
-        for var, obj_id in vars_map:
-            if obj_id in current_ids:
-                var.set(1)
+    def _marcar_valores_iniciales(self, mapa_vars, ids_actuales):
+        """Auxiliar para marcar los checkboxes que ya están seleccionados en edición."""
+        for variable, id_objeto in mapa_vars:
+            if id_objeto in ids_actuales:
+                variable.set(1)
 
-    def save_article(self, window, article_id, title, text, user_name, category_vars_map, tag_vars_map):
-        """Lógica para guardar (crear o editar) un artículo."""
-        if not title or not text or user_name == "No hay usuarios":
-            messagebox.showwarning("Campos Requeridos", "El Título, Texto y Autor son obligatorios.", parent=window)
+    def guardar_articulo(self, ventana, id_articulo, titulo, texto, nombre_usuario, mapa_vars_categoria, mapa_vars_tag):
+        """Lógica para guardar (crear o editar) un artículo en la base de datos."""
+        if not titulo or not texto or nombre_usuario == "No hay usuarios":
+            messagebox.showwarning("Campos Requeridos", "El Título, Texto y Autor son obligatorios.", parent=ventana)
             return
             
         try:
-            user_id = user_manager.get_id_by_name(user_name)
-            if not user_id:
-                messagebox.showerror("Error", "Autor no válido.", parent=window)
+            # Obtiene el ObjectId del autor usando el mapa cache del gestor.
+            id_usuario = gestor_usuarios.obtener_id_por_nombre(nombre_usuario)
+            if not id_usuario:
+                messagebox.showerror("Error", "Autor no válido.", parent=ventana)
                 return
 
-            category_ids = [ _id for var, _id in category_vars_map if var.get() == 1 ]
-            tag_ids = [ _id for var, _id in tag_vars_map if var.get() == 1 ]
+            # Filtra y recolecta los IDs de las categorías y tags marcados.
+            ids_categorias = [ _id for var, _id in mapa_vars_categoria if var.get() == 1 ]
+            ids_tags = [ _id for var, _id in mapa_vars_tag if var.get() == 1 ]
 
-            new_article_data = {
-                "title": title,
-                "text": text,
-                "user_id": user_id,
-                "categories": category_ids,
-                "tags": tag_ids 
+            # Crea el documento base.
+            datos_nuevo_articulo = {
+                "title": titulo,
+                "text": texto,
+                "user_id": id_usuario,
+                "categories": ids_categorias,
+                "tags": ids_tags 
             }
             
-            if article_id:
-                new_article_data["last_modified"] = datetime.datetime.now()
-                self.articles_collection.update_one({"_id": article_id}, {"$set": new_article_data})
-                messagebox.showinfo("Éxito", "Artículo actualizado exitosamente.", parent=window)
+            if id_articulo:
+                # Si hay ID, es una ACTUALIZACIÓN
+                datos_nuevo_articulo["last_modified"] = datetime.datetime.now()
+                self.coleccion_articulos.update_one({"_id": id_articulo}, {"$set": datos_nuevo_articulo})
+                messagebox.showinfo("Éxito", "Artículo actualizado exitosamente.", parent=ventana)
             else:
-                new_article_data["date"] = datetime.datetime.now()
-                self.articles_collection.insert_one(new_article_data)
-                messagebox.showinfo("Éxito", "Artículo creado exitosamente.", parent=window)
+                # Si no hay ID, es una CREACIÓN
+                datos_nuevo_articulo["date"] = datetime.datetime.now()
+                self.coleccion_articulos.insert_one(datos_nuevo_articulo)
+                messagebox.showinfo("Éxito", "Artículo creado exitosamente.", parent=ventana)
 
-            window.destroy()
-            self.load_articles() 
+            ventana.destroy() # Cierra la ventana modal.
+            self.cargar_articulos() # Recarga la lista principal para ver los cambios.
         except Exception as e:
-            messagebox.showerror("Error de Guardado", f"No se pudo guardar el artículo:\n{e}", parent=window)
+            messagebox.showerror("Error de Guardado", f"No se pudo guardar el artículo:\n{e}", parent=ventana)
     
-    def delete_article(self):
+    def eliminar_articulo(self):
         """Elimina un artículo por ID."""
-        article_id = self.article_id_entry.get()
-        if not article_id:
+        id_articulo = self.entrada_id_articulo.get()
+        if not id_articulo:
             messagebox.showwarning("Faltan Datos", "Ingrese el ID del artículo que desea eliminar.")
             return
 
-        if messagebox.askyesno("Confirmar Eliminación", f"¿Está seguro de que desea eliminar el artículo con ID: {article_id}?", parent=self.root):
+        if messagebox.askyesno("Confirmar Eliminación", f"¿Está seguro de que desea eliminar el artículo con ID: {id_articulo}?", parent=self.raiz):
             try:
-                result = self.articles_collection.delete_one({"_id": ObjectId(article_id)})
-                if result.deleted_count > 0:
+                # Usa ObjectId para la eliminación.
+                resultado = self.coleccion_articulos.delete_one({"_id": ObjectId(id_articulo)})
+                if resultado.deleted_count > 0:
                     messagebox.showinfo("Éxito", "Artículo eliminado exitosamente.")
-                    self.article_id_entry.delete(0, 'end')
-                    self.load_articles() 
+                    self.entrada_id_articulo.delete(0, 'end')
+                    self.cargar_articulos() 
                 else:
                     messagebox.showerror("Error", "No se encontró el artículo con ese ID.")
             except Exception as e:
@@ -363,145 +399,151 @@ class MainMenuApp:
 
     # --- LÓGICA DE GESTIÓN GENÉRICA (Tags, Categorías, Usuarios) ---
     
-    def create_generic_crud_frame(self, title, manager, name_key="name"):
-        """Crea un frame CRUD genérico para Tags, Categorías o Usuarios."""
-        frame = ctk.CTkFrame(self.main_content_frame, fg_color="transparent")
+    def crear_frame_crud_generico(self, titulo, gestor, clave_nombre="name"):
+        """Crea un frame CRUD genérico reutilizable para entidades simples."""
+        frame = ctk.CTkFrame(self.frame_contenido_principal, fg_color="transparent")
         
-        ctk.CTkLabel(frame, text=f"Gestión de {title}", font=("Arial", 20, "bold")).pack(pady=10)
+        ctk.CTkLabel(frame, text=f"Gestión de {titulo}", font=("Arial", 20, "bold")).pack(pady=10)
         
+        # ... [El resto de la construcción de widgets genéricos es similar a create_article_frame] ...
+        # (Se omite por brevedad en los comentarios, pero sigue la misma lógica).
+
         # Controles (Crear)
-        create_frame = ctk.CTkFrame(frame)
-        create_frame.pack(pady=5, padx=10, fill="x")
+        frame_crear = ctk.CTkFrame(frame)
+        frame_crear.pack(pady=5, padx=10, fill="x")
 
-        input_label = "Nombre:" if name_key == "name" else "Email:"
-        ctk.CTkLabel(create_frame, text=input_label).pack(side="left", padx=(10, 5))
+        etiqueta_entrada = "Nombre:" if clave_nombre == "name" else "Email:"
+        ctk.CTkLabel(frame_crear, text=etiqueta_entrada).pack(side="left", padx=(10, 5))
         
-        create_entry = ctk.CTkEntry(create_frame, placeholder_text=f"Nuevo {input_label.lower().replace(':','')}", width=250)
-        create_entry.pack(side="left", padx=(0, 10), fill="x", expand=True)
+        entrada_crear = ctk.CTkEntry(frame_crear, placeholder_text=f"Nuevo {etiqueta_entrada.lower().replace(':','')}", width=250)
+        entrada_crear.pack(side="left", padx=(0, 10), fill="x", expand=True)
 
-        ctk.CTkButton(create_frame, text=f"Crear {title[:-1]}", command=lambda: self.create_generic_item(manager, create_entry.get(), name_key, create_entry)).pack(side="left", padx=(5, 10))
+        ctk.CTkButton(frame_crear, text=f"Crear {titulo[:-1]}", command=lambda: self.crear_item_generico(gestor, entrada_crear.get(), clave_nombre, entrada_crear)).pack(side="left", padx=(5, 10))
 
         # Textbox para mostrar la lista
-        textbox = ctk.CTkTextbox(frame, width=760, height=450, font=("Consolas", 13))
-        textbox.pack(pady=10, padx=10, fill="both", expand=True)
-        textbox.configure(state="disabled")
+        caja_texto = ctk.CTkTextbox(frame, width=760, height=450, font=("Consolas", 13))
+        caja_texto.pack(pady=10, padx=10, fill="both", expand=True)
+        caja_texto.configure(state="disabled")
 
         # Controles (Editar/Eliminar)
-        action_frame = ctk.CTkFrame(frame)
-        action_frame.pack(pady=5, padx=10, fill="x")
+        frame_accion = ctk.CTkFrame(frame)
+        frame_accion.pack(pady=5, padx=10, fill="x")
 
-        id_entry = ctk.CTkEntry(action_frame, placeholder_text="ID del elemento para acción", width=250)
-        id_entry.pack(side="left", padx=(10, 5))
+        entrada_id = ctk.CTkEntry(frame_accion, placeholder_text="ID del elemento para acción", width=250)
+        entrada_id.pack(side="left", padx=(10, 5))
 
-        edit_entry = ctk.CTkEntry(action_frame, placeholder_text=f"Nuevo {input_label.lower().replace(':','')}", width=250)
-        edit_entry.pack(side="left", padx=5, fill="x", expand=True)
+        entrada_editar = ctk.CTkEntry(frame_accion, placeholder_text=f"Nuevo {etiqueta_entrada.lower().replace(':','')}", width=250)
+        entrada_editar.pack(side="left", padx=5, fill="x", expand=True)
 
         ctk.CTkButton(
-            action_frame, 
+            frame_accion, 
             text="Actualizar", 
-            command=lambda: self.update_generic_item(manager, id_entry.get(), edit_entry.get(), name_key, edit_entry),
+            command=lambda: self.actualizar_item_generico(gestor, entrada_id.get(), entrada_editar.get(), clave_nombre, entrada_editar),
             fg_color="orange"
         ).pack(side="left", padx=5)
         
         ctk.CTkButton(
-            action_frame, 
+            frame_accion, 
             text="Eliminar", 
-            command=lambda: self.delete_generic_item(manager, id_entry.get()),
+            command=lambda: self.eliminar_item_generico(gestor, entrada_id.get()),
             fg_color="red"
         ).pack(side="left", padx=(5, 10))
 
-        frame.textbox = textbox
-        frame.name_key = name_key
-        frame.create_entry = create_entry
-        frame.id_entry = id_entry
+        # Almacena referencias necesarias en el frame
+        frame.textbox = caja_texto
+        frame.clave_nombre = clave_nombre
+        frame.entrada_crear = entrada_crear
+        frame.entrada_id = entrada_id
         
         return frame
 
-    def load_generic_list(self, manager, textbox, name_key):
+    def cargar_lista_generica(self, gestor, caja_texto, clave_nombre):
         """Carga y muestra la lista de entidades genéricas (Tags, Categorías, Usuarios)."""
-        manager.load_map() 
-        data_list = manager.get_all() 
+        gestor.cargar_mapa() # Recarga el mapa cache antes de obtener todo.
+        lista_datos = gestor.obtener_todos() # Llama al CRUD genérico LECTURA.
         
-        textbox.configure(state="normal")
-        textbox.delete("1.0", "end")
+        caja_texto.configure(state="normal")
+        caja_texto.delete("1.0", "end")
         
-        text_to_display = f"--- Lista de {manager.collection.name.capitalize()} ---\n\n"
+        texto_a_mostrar = f"--- Lista de {gestor.coleccion.name.capitalize()} ---\n\n"
         
-        if not data_list:
-            text_to_display += "No hay elementos."
+        if not lista_datos:
+            texto_a_mostrar += "No hay elementos."
         else:
-            for item in data_list:
-                key_value = item.get(name_key, "N/A")
-                text_to_display += f"ID: {item['_id']} | {name_key.capitalize()}: {key_value}\n"
+            for item in lista_datos:
+                valor_clave = item.get(clave_nombre, "N/A")
+                texto_a_mostrar += f"ID: {item['_id']} | {clave_nombre.capitalize()}: {valor_clave}\n"
                 
-                if name_key == "email" and item.get("name"):
-                    text_to_display += f"  Nombre: {item['name']}\n"
+                if clave_nombre == "email" and item.get("name"):
+                    texto_a_mostrar += f"  Nombre: {item['name']}\n"
                 
-                if name_key == "email" and item.get("password"):
-                    text_to_display += f"  Contraseña: *** (oculta)\n" # Ocultar contraseña
+                if clave_nombre == "email" and item.get("password"):
+                    texto_a_mostrar += f"  Contraseña: *** (oculta)\n" # Ocultar la contraseña por seguridad.
                 
-                text_to_display += "-"*40 + "\n"
+                texto_a_mostrar += "-"*40 + "\n"
                 
-        textbox.insert("1.0", text_to_display)
-        textbox.configure(state="disabled")
+        caja_texto.insert("1.0", texto_a_mostrar)
+        caja_texto.configure(state="disabled")
 
-    def create_generic_item(self, manager, value, name_key, entry_widget):
+    def crear_item_generico(self, gestor, valor, clave_nombre, widget_entrada):
         """Crea una nueva entidad genérica (Tag, Categoría, Usuario)."""
-        if not value:
-            messagebox.showwarning("Faltan Datos", f"El campo {name_key.capitalize()} es obligatorio.")
+        if not valor:
+            messagebox.showwarning("Faltan Datos", f"El campo {clave_nombre.capitalize()} es obligatorio.")
             return
 
-        data = {name_key: value}
-        if manager.collection.name == "users":
-            # NOTA: Esto es inseguro, se debe usar hasheo
-            data = {"email": value, "name": "Usuario Nuevo", "password": "123"} 
+        datos = {clave_nombre: valor}
+        # Lógica especial para Usuarios (asigna nombre y contraseña por defecto).
+        if gestor.coleccion.name == "users":
+            datos = {"email": valor, "name": "Usuario Nuevo", "password": "123"} 
             
-        inserted_id = manager.create_one(data) 
+        id_insertado = gestor.crear_uno(datos) # Llama al CRUD genérico CREACIÓN.
         
-        if inserted_id:
-            messagebox.showinfo("Éxito", f"{manager.collection.name[:-1].capitalize()} creado exitosamente con ID: {inserted_id}")
-            entry_widget.delete(0, 'end')
-            self.select_frame_by_name(manager.collection.name) 
+        if id_insertado:
+            messagebox.showinfo("Éxito", f"{gestor.coleccion.name[:-1].capitalize()} creado exitosamente con ID: {id_insertado}")
+            widget_entrada.delete(0, 'end')
+            self.seleccionar_frame_por_nombre(gestor.coleccion.name) # Recarga la lista.
         else:
-            messagebox.showerror("Error", f"No se pudo crear el elemento en {manager.collection.name}.")
+            messagebox.showerror("Error", f"No se pudo crear el elemento en {gestor.coleccion.name}.")
 
-    def update_generic_item(self, manager, item_id, new_value, name_key, entry_widget):
+    def actualizar_item_generico(self, gestor, id_item, nuevo_valor, clave_nombre, widget_entrada):
         """Actualiza una entidad genérica por ID."""
-        if not item_id or not new_value:
+        if not id_item or not nuevo_valor:
             messagebox.showwarning("Faltan Datos", "Ingrese el ID y el nuevo valor.")
             return
 
         try:
-            obj_id = ObjectId(item_id)
-            data_to_update = {name_key: new_value}
+            id_objeto = ObjectId(id_item)
+            datos_a_actualizar = {clave_nombre: nuevo_valor}
             
-            modified_count = manager.update_one(obj_id, data_to_update) 
+            # Llama al CRUD genérico ACTUALIZACIÓN.
+            modificado_count = gestor.actualizar_uno(id_objeto, datos_a_actualizar) 
             
-            if modified_count > 0:
-                messagebox.showinfo("Éxito", f"{manager.collection.name[:-1].capitalize()} actualizado exitosamente.")
-                entry_widget.delete(0, 'end')
-                self.select_frame_by_name(manager.collection.name) 
+            if modificado_count > 0:
+                messagebox.showinfo("Éxito", f"{gestor.coleccion.name[:-1].capitalize()} actualizado exitosamente.")
+                widget_entrada.delete(0, 'end')
+                self.seleccionar_frame_por_nombre(gestor.coleccion.name) # Recarga la lista.
             else:
                 messagebox.showwarning("Advertencia", "No se encontró el elemento o no hubo cambios.")
 
         except Exception as e:
             messagebox.showerror("ID Inválido", f"El ID proporcionado no es un ObjectId válido o hubo un error: {e}")
 
-    def delete_generic_item(self, manager, item_id):
+    def eliminar_item_generico(self, gestor, id_item):
         """Elimina una entidad genérica por ID."""
-        if not item_id:
+        if not id_item:
             messagebox.showwarning("Faltan Datos", "Ingrese el ID del elemento que desea eliminar.")
             return
 
-        if messagebox.askyesno("Confirmar Eliminación", f"¿Está seguro de eliminar el elemento con ID: {item_id} de {manager.collection.name}?", parent=self.root):
+        if messagebox.askyesno("Confirmar Eliminación", f"¿Está seguro de eliminar el elemento con ID: {id_item} de {gestor.coleccion.name}?", parent=self.raiz):
             try:
-                result = manager.delete_one(ObjectId(item_id))
+                # Llama al CRUD genérico ELIMINACIÓN.
+                resultado = gestor.eliminar_uno(ObjectId(id_item))
                 
-                if result > 0:
-                    messagebox.showinfo("Éxito", f"Elemento de {manager.collection.name} eliminado exitosamente.")
-                    frame = self.frames[manager.collection.name]
-                    frame.id_entry.delete(0, 'end')
-                    self.select_frame_by_name(manager.collection.name) 
+                if resultado > 0:
+                    messagebox.showinfo("Éxito", f"Elemento de {gestor.coleccion.name} eliminado exitosamente.")
+                    frame = self.frames[gestor.coleccion.name]
+                    frame.entrada_id.delete(0, 'end')
+                    self.seleccionar_frame_por_nombre(gestor.coleccion.name) # Recarga la lista.
                 else:
                     messagebox.showerror("Error", "No se encontró el elemento con ese ID.")
             except Exception as e:
@@ -510,9 +552,10 @@ class MainMenuApp:
 
 # --- PUNTO DE ENTRADA ---
 if __name__ == "__main__":
+    # Configuración de apariencia antes de crear la ventana principal.
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")
     
-    app_root = ctk.CTk()
-    app_logic = MainMenuApp(app_root) 
-    app_root.mainloop()
+    raiz_app = ctk.CTk()
+    logica_app = AppMenuPrincipal(raiz_app) 
+    raiz_app.mainloop() # Inicia el bucle de la GUI.

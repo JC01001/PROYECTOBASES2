@@ -1,114 +1,126 @@
 from Conexion import DB 
-from bson.objectid import ObjectId
+from bson.objectid import ObjectId 
 import datetime
 
-class EntityManager:
+class GestorEntidad:
     """Clase base para gestionar colecciones, mapas de ID/Nombre y operaciones CRUD."""
     
-    def __init__(self, collection_name, name_key="name"):
+    def __init__(self, nombre_coleccion, clave_nombre="name"):
+        # Verifica si la conexión a la base de datos (DB) falló previamente.
         if DB is None:
             raise ConnectionError("La conexión a la base de datos no está disponible.")
             
-        self.collection = DB[collection_name] 
-        self.name_key = name_key 
-        self.name_to_id_map = {} # Cache para mapear { "Nombre/Email": ObjectId(...) }
+        self.coleccion = DB[nombre_coleccion] # Asigna la colección de MongoDB (ej: DB['users']).
+        self.clave_nombre = clave_nombre # Clave del campo que se usará para el mapeo (ej: 'name' o 'email').
+        self.mapa_nombre_a_id = {} # Diccionario cache para mapear { "Nombre/Email": ObjectId(...) }.
 
-    def load_map(self):
+    def cargar_mapa(self):
         """Carga el mapa {Nombre/Email: ID} de la colección para consultas rápidas."""
-        self.name_to_id_map.clear()
+        self.mapa_nombre_a_id.clear() # Limpia el mapa anterior.
         try:
-            entities = self.collection.find({}, {"_id": 1, self.name_key: 1})
-            for entity in entities:
-                if self.name_key in entity:
-                    self.name_to_id_map[entity[self.name_key]] = entity["_id"]
-            print(f"Cargados {len(self.name_to_id_map)} elementos en '{self.collection.name}'.")
+            # Busca todos los documentos, seleccionando solo el ID y la clave de nombre/email.
+            entidades = self.coleccion.find({}, {"_id": 1, self.clave_nombre: 1})
+            for entidad in entidades:
+                if self.clave_nombre in entidad:
+                    # Rellena el mapa cache: Clave=Nombre/Email, Valor=ObjectId.
+                    self.mapa_nombre_a_id[entidad[self.clave_nombre]] = entidad["_id"]
+            print(f"Cargados {len(self.mapa_nombre_a_id)} elementos en '{self.coleccion.name}'.")
         except Exception as e:
-            print(f"Error cargando el mapa para {self.collection.name}: {e}")
+            print(f"Error cargando el mapa para {self.coleccion.name}: {e}")
             
-    def get_all_names(self):
+    def obtener_todos_los_nombres(self):
         """Retorna una lista de todos los nombres (o emails) para OptionMenus/Checkboxes."""
-        return list(self.name_to_id_map.keys())
+        return list(self.mapa_nombre_a_id.keys())
     
-    def get_id_by_name(self, name):
-        """Retorna el ObjectId dado un nombre o email."""
-        return self.name_to_id_map.get(name)
+    def obtener_id_por_nombre(self, nombre):
+        """Retorna el ObjectId (el ID único de MongoDB) dado un nombre o email."""
+        return self.mapa_nombre_a_id.get(nombre) # Busca en el mapa cache.
 
-    # --- CRUD Genérico ---
-    def get_all(self):
+    # --- Operaciones CRUD Genéricas ---
+    
+    def obtener_todos(self):
         """Retorna todos los documentos de la colección como una lista."""
         try:
-            return list(self.collection.find()) 
+            return list(self.coleccion.find()) # Realiza la consulta a la base de datos.
         except Exception as e:
-            print(f"Error obteniendo todos los documentos para {self.collection.name}: {e}")
+            print(f"Error obteniendo todos los documentos para {self.coleccion.name}: {e}")
             return []
 
-    def create_one(self, data):
+    def crear_uno(self, datos):
         """Inserta un nuevo documento en la colección."""
         try:
-            result = self.collection.insert_one(data)
-            self.load_map() 
-            return result.inserted_id
+            resultado = self.coleccion.insert_one(datos)
+            self.cargar_mapa() # El mapa debe recargarse para incluir el nuevo elemento.
+            return resultado.inserted_id # Retorna el ID generado por MongoDB.
         except Exception as e:
-            print(f"Error creando el documento en {self.collection.name}: {e}")
+            print(f"Error creando el documento en {self.coleccion.name}: {e}")
             return None
 
-    def update_one(self, object_id, new_data):
+    def actualizar_uno(self, id_objeto, nuevos_datos):
         """Actualiza un documento por su ObjectId."""
         try:
-            result = self.collection.update_one({"_id": object_id}, {"$set": new_data})
-            self.load_map()
-            return result.modified_count
+            # Usa $set para actualizar solo los campos en 'nuevos_datos'.
+            resultado = self.coleccion.update_one({"_id": id_objeto}, {"$set": nuevos_datos})
+            self.cargar_mapa() # Recarga el mapa por si el nombre/email fue actualizado.
+            return resultado.modified_count # Retorna cuántos documentos fueron modificados (debería ser 1 o 0).
         except Exception as e:
-            print(f"Error actualizando el documento en {self.collection.name}: {e}")
+            print(f"Error actualizando el documento en {self.coleccion.name}: {e}")
             return 0
 
-    def delete_one(self, object_id):
+    def eliminar_uno(self, id_objeto):
         """Elimina un documento por su ObjectId."""
         try:
-            result = self.collection.delete_one({"_id": object_id})
-            self.load_map()
-            return result.deleted_count
+            resultado = self.coleccion.delete_one({"_id": id_objeto})
+            self.cargar_mapa() # Recarga el mapa para eliminar la referencia del elemento borrado.
+            return resultado.deleted_count # Retorna cuántos documentos fueron eliminados (debería ser 1 o 0).
         except Exception as e:
-            print(f"Error eliminando el documento en {self.collection.name}: {e}")
+            print(f"Error eliminando el documento en {self.coleccion.name}: {e}")
             return 0
 
-# --- Clases Específicas ---
+# --- Clases Específicas que Heredan de GestorEntidad ---
 
-class UserManager(EntityManager):
+class GestorUsuario(GestorEntidad):
     def __init__(self):
-        super().__init__("users", name_key="email") 
+        # Llama al constructor de la clase base, usando "email" como clave_nombre.
+        super().__init__("users", clave_nombre="email") 
         
-    def authenticate(self, email, password):
+    def autenticar(self, email, password):
         """Verifica el email y la contraseña contra la base de datos."""
         try:
-            # NOTA: En una app real, la contraseña debe estar hasheada.
-            user = self.collection.find_one({"email": email, "password": password})
-            return user
+            # Busca un documento que coincida con el email Y la contraseña.
+            # NOTA: En una app real, la contraseña debe estar hasheada (no en texto plano).
+            usuario = self.coleccion.find_one({"email": email, "password": password})
+            return usuario # Retorna el documento del usuario si la autenticación es exitosa, sino None.
         except Exception as e:
             print(f"Error de autenticación: {e}")
             return None
 
-class CategoryManager(EntityManager):
+class GestorCategoria(GestorEntidad):
     def __init__(self):
-        super().__init__("categories", name_key="name")
+        # Usa la colección "categories" y "name" como clave.
+        super().__init__("categories", clave_nombre="name")
         
-class TagManager(EntityManager):
+class GestorEtiqueta(GestorEntidad):
     def __init__(self):
-        super().__init__("tags", name_key="name")
+        # Usa la colección "tags" y "name" como clave.
+        super().__init__("tags", clave_nombre="name")
         
-# Instancias globales para ser importadas en las interfaces
-user_manager = UserManager()
-category_manager = CategoryManager()
-tag_manager = TagManager()
+# --- Instancias Globales de Gestores ---
+# Estas son las instancias que se importan en Menu.py y Login.py.
+gestor_usuarios = GestorUsuario()
+gestor_categorias = GestorCategoria()
+gestor_etiquetas = GestorEtiqueta()
 
-class ArticleManager:
+class GestorArticulo:
+    """Clase específica para Artículos. No hereda de GestorEntidad porque usa agregación compleja."""
     def __init__(self):
         if DB is None:
             raise ConnectionError("La conexión a la base de datos no está disponible.")
-        self.articles_collection = DB["articles"]
+        self.coleccion_articulos = DB["articles"] # Referencia directa a la colección.
     
-    def get_collection(self):
+    def obtener_coleccion(self):
         """Retorna el objeto de la colección 'articles'."""
-        return self.articles_collection
+        # Se usa para ejecutar comandos de agregación directamente desde Menu.py.
+        return self.coleccion_articulos
         
-article_manager = ArticleManager()
+gestor_articulos = GestorArticulo() # Instancia global para el gestor de artículos.
