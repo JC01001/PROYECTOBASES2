@@ -3,7 +3,8 @@ from tkinter import messagebox
 import datetime
 from bson.objectid import ObjectId
 
-from Conexion import MongoDBConnection
+# Importaciones de nuestros módulos
+from Conexion import MongoDBConnection, DB # Importamos DB
 from Logica import (
     user_manager, 
     category_manager, 
@@ -18,10 +19,18 @@ class MainMenuApp:
         self.root.title("Gestión CRUD - Blog de Recetas")
         self.root.geometry("1000x700")
         
-        self.db_conn = MongoDBConnection() 
+        # ¡CHEQUEO IMPORTANTE!
+        # Verificamos la conexión global al inicio
+        if DB is None:
+            messagebox.showerror("Error Global", "La conexión global a la DB falló. Revisa que mongod esté corriendo.")
+            self.root.quit()
+            return
+            
+        # Ya no creamos 'self.db_conn', usamos la global
         self.articles_collection = article_manager.get_collection()
         self.current_frame = None
 
+        # Cargar mapas al inicio
         user_manager.load_map()
         category_manager.load_map()
         tag_manager.load_map()
@@ -30,10 +39,10 @@ class MainMenuApp:
         self.root.grid_columnconfigure(1, weight=1)
         self.root.grid_rowconfigure(0, weight=1)
 
-        # Sidebar 
+        # --- Sidebar ---
         self.sidebar_frame = ctk.CTkFrame(self.root, width=180, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(5, weight=1)
+        self.sidebar_frame.grid_rowconfigure(5, weight=1) # Espacio para el botón de salir
 
         ctk.CTkLabel(self.sidebar_frame, text="Menú Principal", font=("Arial", 18, "bold")).pack(pady=20)
         
@@ -49,13 +58,15 @@ class MainMenuApp:
         self.user_button = ctk.CTkButton(self.sidebar_frame, text="4. Usuarios (CRUD)", command=lambda: self.select_frame_by_name("users"))
         self.user_button.pack(pady=10, padx=20, fill="x")
         
-        ctk.CTkButton(self.sidebar_frame, text="Salir", command=self.root.quit, fg_color="red").pack(pady=(150, 20), padx=20, fill="x", anchor="s")
+        ctk.CTkButton(self.sidebar_frame, text="Salir", command=self.root.quit, fg_color="red").pack(side="bottom", pady=20, padx=20, fill="x")
 
+        # --- Frame de Contenido Principal ---
         self.main_content_frame = ctk.CTkFrame(self.root, corner_radius=0)
         self.main_content_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         self.main_content_frame.grid_columnconfigure(0, weight=1)
         self.main_content_frame.grid_rowconfigure(0, weight=1)
         
+        # --- Creación de los Frames ---
         self.frames = {
             "articles": self.create_article_frame(),
             "categories": self.create_generic_crud_frame("Categorías", category_manager, name_key="name"),
@@ -63,6 +74,7 @@ class MainMenuApp:
             "users": self.create_generic_crud_frame("Usuarios", user_manager, name_key="email")
         }
         
+        # Iniciar en la vista de artículos
         self.select_frame_by_name("articles")
 
     def select_frame_by_name(self, name):
@@ -73,6 +85,7 @@ class MainMenuApp:
         self.current_frame = self.frames[name]
         self.current_frame.grid(row=0, column=0, sticky="nsew")
 
+        # Cargar datos frescos al cambiar de pestaña
         if name == "articles":
             self.load_articles()
         elif name in ["categories", "tags", "users"]:
@@ -84,14 +97,14 @@ class MainMenuApp:
 
     def create_article_frame(self):
         """Crea y configura el frame para la gestión de Artículos."""
-        frame = ctk.CTkFrame(self.main_content_frame)
+        frame = ctk.CTkFrame(self.main_content_frame, fg_color="transparent")
         
         ctk.CTkLabel(frame, text="Gestión de Artículos", font=("Arial", 20, "bold")).pack(pady=10)
         
         controls_frame = ctk.CTkFrame(frame)
         controls_frame.pack(pady=5, padx=10, fill="x")
         
-        search_entry = ctk.CTkEntry(controls_frame, width=300, placeholder_text="Buscar por título o texto...")
+        search_entry = ctk.CTkEntry(controls_frame, width=300, placeholder_text="Buscar por título, texto, autor, categoría o tag...")
         search_entry.pack(side="left", padx=(10, 5), fill="x", expand=True)
 
         ctk.CTkButton(controls_frame, text="Buscar / Recargar", command=self.load_articles).pack(side="left", padx=5)
@@ -115,29 +128,44 @@ class MainMenuApp:
 
     def load_articles(self):
         """Carga y muestra la lista de artículos, aplicando el filtro de búsqueda."""
+        
+        # --- LÓGICA DE FILTRO (MODIFICADA) ---
         search_entry = self.frames["articles"].search_entry
         search_term = search_entry.get()
-        mongo_filter = {}
+        mongo_filter = {} # Por defecto, el filtro está vacío (busca todo)
+        
         if search_term:
             regex_query = {"$regex": search_term, "$options": "i"}
+            
+            # ¡MODIFICADO! Ahora el $or busca en 5 campos
             mongo_filter = {
                 "$or": [
-                    {"title": regex_query}, {"text": regex_query}
+                    {"title": regex_query}, 
+                    {"text": regex_query},
+                    {"author_details.name": regex_query},  # <-- NUEVO
+                    {"category_details.name": regex_query},# <-- NUEVO
+                    {"tag_details.name": regex_query}     # <-- NUEVO
                 ]
             }
         
-        # Pipeline de agregación
+        # --- PIPELINE DE AGREGACIÓN (MODIFICADO) ---
         pipeline = [
-            { "$match": mongo_filter },
+            # 1. Traemos todas las relaciones PRIMERO
             { "$lookup": {"from": "users", "localField": "user_id", "foreignField": "_id", "as": "author_details"}},
             { "$lookup": {"from": "categories", "localField": "categories", "foreignField": "_id", "as": "category_details"}},
             { "$lookup": {"from": "tags", "localField": "tags", "foreignField": "_id", "as": "tag_details"}},
-            { "$unwind": {"path": "$author_details", "preserveNullAndEmptyArrays": True}} 
+            
+            # 2. Desanidamos el autor para facilitar la búsqueda
+            { "$unwind": {"path": "$author_details", "preserveNullAndEmptyArrays": True}},
+            
+            # 3. ¡NUEVA POSICIÓN! Aplicamos el filtro DESPUÉS de los joins
+            { "$match": mongo_filter }
         ]
         
         try:
             self.article_textbox.configure(state="normal")
             self.article_textbox.delete("1.0", "end")
+            
             articles = self.articles_collection.aggregate(pipeline) 
             text_to_display = ""
             count = 0
@@ -233,7 +261,7 @@ class MainMenuApp:
             text_box.insert("1.0", article.get("text", ""))
             
             # Busca el email del autor por su ID
-            author_email = user_manager.name_to_id_map.get(article.get("user_id")) 
+            author_email = user_manager.get_name_by_id(article.get("user_id")) # Método invertido
             if author_email:
                 user_option_menu.set(author_email)
 
@@ -257,15 +285,15 @@ class MainMenuApp:
         map_list = []
         names = manager.get_all_names() 
         
-        container = ctk.CTkFrame(parent_frame, fg_color="transparent")
-        container.pack(padx=10, pady=5, anchor="w")
+        container = ctk.CTkScrollableFrame(parent_frame, height=100) # Frame con scroll
+        container.pack(padx=10, pady=5, fill="x")
         
         for name in names:
             var = ctk.IntVar(value=0)
             obj_id = manager.get_id_by_name(name)
             
             checkbox = ctk.CTkCheckBox(container, text=name, variable=var)
-            checkbox.pack(side="left", padx=10)
+            checkbox.pack(anchor="w", padx=10)
             map_list.append((var, obj_id))
         
         return map_list
@@ -337,12 +365,12 @@ class MainMenuApp:
     
     def create_generic_crud_frame(self, title, manager, name_key="name"):
         """Crea un frame CRUD genérico para Tags, Categorías o Usuarios."""
-        frame = ctk.CTkFrame(self.main_content_frame)
+        frame = ctk.CTkFrame(self.main_content_frame, fg_color="transparent")
         
         ctk.CTkLabel(frame, text=f"Gestión de {title}", font=("Arial", 20, "bold")).pack(pady=10)
         
         # Controles (Crear)
-        create_frame = ctk.CTkFrame(frame) # <--- CORRECCIÓN DEL ERROR
+        create_frame = ctk.CTkFrame(frame)
         create_frame.pack(pady=5, padx=10, fill="x")
 
         input_label = "Nombre:" if name_key == "name" else "Email:"
@@ -410,7 +438,7 @@ class MainMenuApp:
                     text_to_display += f"  Nombre: {item['name']}\n"
                 
                 if name_key == "email" and item.get("password"):
-                    text_to_display += f"  Contraseña: {item['password']} (Debe ser hasheada)\n"
+                    text_to_display += f"  Contraseña: *** (oculta)\n" # Ocultar contraseña
                 
                 text_to_display += "-"*40 + "\n"
                 
@@ -425,6 +453,7 @@ class MainMenuApp:
 
         data = {name_key: value}
         if manager.collection.name == "users":
+            # NOTA: Esto es inseguro, se debe usar hasheo
             data = {"email": value, "name": "Usuario Nuevo", "password": "123"} 
             
         inserted_id = manager.create_one(data) 
