@@ -5,8 +5,8 @@ import sys
 import os 
 
 # Importaciones de nuestros módulos de lógica y conexión.
-from Conexion import MongoDBConnection # Importa la clase de conexión (para manejar el inicio y errores).
-from Logica import user_manager # Importa el gestor de usuarios para la autenticación.
+from Conexion import ConexionMongoDB # Importa la clase de conexión (para manejar el inicio y errores).
+from Logica import gestor_usuarios # Importa el gestor de usuarios para la autenticación.
 
 class AppLogin:
     """Clase para la ventana de Inicio de Sesión."""
@@ -19,10 +19,10 @@ class AppLogin:
         # --- Manejo de Conexión ---
         # Inicializa la conexión. Si la conexión a MongoDB falla, llama a raiz.quit() 
         # para cerrar la aplicación de manera segura, mostrando un error de Tkinter.
-        self.conn_db = MongoDBConnection(raiz=self.raiz) 
+        self.conn_db = ConexionMongoDB(raiz=self.raiz) 
 
         # Carga inicial de datos de usuarios (necesario para el gestor de usuarios).
-        user_manager.cargar_mapa()
+        gestor_usuarios.cargar_mapa()
 
         # --- Configuración y Creación de la Interfaz ---
         ctk.set_appearance_mode("dark") # Establece el tema oscuro.
@@ -60,7 +60,7 @@ class AppLogin:
 
         # LLAMADA A LA LÓGICA DE AUTENTICACIÓN (en Logica.py)
         # user_manager.authenticate() retorna el documento del usuario si es exitoso, sino None.
-        usuario = user_manager.autenticar(email, password)
+        usuario = gestor_usuarios.autenticar(email, password)
         
         if usuario:
             # Autenticación exitosa

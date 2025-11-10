@@ -4,12 +4,13 @@ import datetime
 from bson.objectid import ObjectId 
 
 # Importaciones de nuestros módulos
-from Conexion import MongoDBConnection, DB # Importa la variable global DB para el chequeo de conexión.
+from Conexion import ConexionMongoDB, DB # Importa la variable global DB para el chequeo de conexión.
 from Logica import (
     gestor_usuarios, # Gestor de la colección 'users'.
     gestor_categorias, # Gestor de la colección 'categories'.
     gestor_etiquetas, # Gestor de la colección 'tags'.
-    gestor_articulos # Gestor de la colección 'articles'.
+    gestor_articulos, # Gestor de la colección 'articles'.
+    gestor_comentarios # Gestor de la colección 'comentarios'
 )
 
 class AppMenuPrincipal:
@@ -254,6 +255,7 @@ class AppMenuPrincipal:
         
         frame_formulario = ctk.CTkScrollableFrame(ventana) # Frame con scrollbar.
         frame_formulario.pack(fill="both", expand=True, padx=20, pady=20)
+
         
         # Widgets del formulario: Título, Texto, Autor (OptionMenu), Categorías (Checkboxes), Tags (Checkboxes).
         
@@ -309,6 +311,67 @@ class AppMenuPrincipal:
                                           fg_color="green",
                                           command=comando_guardar)
         boton_guardar.pack(pady=20, padx=10)
+        if es_edicion and articulo:
+        # El ID del artículo actual.
+         id_articulo = articulo['_id'] 
+        
+        ctk.CTkLabel(frame_formulario, text="--- Comentarios ---", font=("Arial", 16, "bold")).pack(pady=(20, 5), padx=10, anchor="w")
+        
+        # 1. Caja de texto para mostrar comentarios existentes
+        caja_comentarios = ctk.CTkTextbox(frame_formulario, width=500, height=150, font=("Consolas", 11))
+        caja_comentarios.pack(padx=10, pady=5)
+        caja_comentarios.configure(state="disabled")
+        
+        # Función para cargar y mostrar los comentarios
+        def recargar_comentarios():
+            comentarios = gestor_comentarios.obtener_comentarios_por_articulo(id_articulo)
+            caja_comentarios.configure(state="normal")
+            caja_comentarios.delete("1.0", "end")
+            texto = f"({len(comentarios)} Comentarios)\n"
+            
+            for c in comentarios:
+                autor_email = c.get('author_details', {}).get('email', 'Desconocido')
+                fecha_str = c.get('date', datetime.datetime.now()).strftime("%Y-%m-%d %H:%M")
+                texto += f"[{autor_email} - {fecha_str}]: {c.get('text', '')}\n"
+                texto += "---" + "\n"
+                
+            caja_comentarios.insert("1.0", texto)
+            caja_comentarios.configure(state="disabled")
+
+        recargar_comentarios() # Carga inicial
+
+        # 2. Entrada para nuevo comentario
+        ctk.CTkLabel(frame_formulario, text="Agregar Comentario:").pack(padx=10, pady=(10, 0), anchor="w")
+        entrada_comentario = ctk.CTkEntry(frame_formulario, width=400, placeholder_text="Escribe tu comentario...")
+        entrada_comentario.pack(side="left", padx=(10, 5))
+        
+        # Lógica para guardar el nuevo comentario
+        def agregar_comentario_action():
+            texto = entrada_comentario.get()
+            # NOTA: Debes tener el ID del usuario LOGUEADO globalmente.
+            # Por ahora, usaremos un ID de usuario por defecto (el ID del autor del artículo)
+            # o, idealmente, el ID de un usuario que guardaste al hacer login.
+            
+            # --- CAMBIAR ESTO: Asumiremos que el usuario logueado es el autor del artículo ---
+            # DEBES REEMPLAZAR 'articulo.get("user_id")' por una variable global
+            # que guarde el ID del usuario que hizo login.
+            id_usuario_actual = articulo.get("user_id") 
+
+            if not texto:
+                messagebox.showwarning("Vacío", "El comentario no puede estar vacío.", parent=ventana)
+                return
+
+            resultado = gestor_comentarios.crear_comentario(id_articulo, id_usuario_actual, texto)
+            
+            if resultado:
+                messagebox.showinfo("Éxito", "Comentario agregado.", parent=ventana)
+                entrada_comentario.delete(0, 'end') # Limpia el campo
+                recargar_comentarios() # Recarga la vista de comentarios
+            else:
+                messagebox.showerror("Error", "No se pudo agregar el comentario.", parent=ventana)
+
+
+        ctk.CTkButton(frame_formulario, text="Comentar", command=agregar_comentario_action).pack(side="left", padx=(5, 10))
 
     def _configurar_checkboxes(self, frame_padre, gestor):
         """Función auxiliar para crear un conjunto de checkboxes de un gestor (Categorías/Tags)."""

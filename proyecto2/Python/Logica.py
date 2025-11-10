@@ -124,3 +124,51 @@ class GestorArticulo:
         return self.coleccion_articulos
         
 gestor_articulos = GestorArticulo() # Instancia global para el gestor de artículos.
+
+class GestorComentario(GestorEntidad):
+    """Clase específica para Comentarios. Usa la colección 'comments'."""
+    def __init__(self):
+        # Llama al constructor de la clase base. No necesita clave_nombre para mapeo simple.
+        super().__init__("comments", clave_nombre="text") 
+
+    def crear_comentario(self, id_articulo, id_usuario, texto):
+        """Inserta un nuevo comentario referenciando al artículo y al usuario."""
+        if not id_articulo or not id_usuario or not texto:
+            return None # Validación básica
+
+        datos = {
+            "article_id": id_articulo, # ID del artículo/receta comentado.
+            "user_id": id_usuario,     # ID del autor del comentario.
+            "text": texto,
+            "date": datetime.datetime.now()
+        }
+        # Llama al método de inserción de la clase base.
+        return self.crear_uno(datos) 
+
+    def obtener_comentarios_por_articulo(self, id_articulo):
+        """Obtiene y detalla todos los comentarios para un artículo específico."""
+        
+        # --- PIPELINE DE AGREGACIÓN para unir el autor del comentario ---
+        pipeline = [
+            # 1. $match: Filtra solo los comentarios de este artículo.
+            { "$match": {"article_id": id_articulo} },
+            
+            # 2. $lookup: Trae los detalles del autor del comentario (user_id -> users._id).
+            { "$lookup": {"from": "users", "localField": "user_id", "foreignField": "_id", "as": "author_details"}},
+            
+            # 3. $unwind: Desanida el autor (que solo tiene un elemento).
+            { "$unwind": {"path": "$author_details", "preserveNullAndEmptyArrays": True}},
+
+            # 4. $sort: Muestra los comentarios más recientes primero.
+            { "$sort": {"date": -1} } 
+        ]
+        
+        try:
+            # Ejecuta la agregación en la colección de comentarios.
+            return list(self.coleccion.aggregate(pipeline))
+        except Exception as e:
+            print(f"Error en la agregación de comentarios: {e}")
+            return []
+
+# --- Instancia Global del Gestor de Comentarios ---
+gestor_comentarios = GestorComentario()
