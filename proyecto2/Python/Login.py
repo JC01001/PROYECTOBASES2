@@ -3,7 +3,7 @@ from tkinter import messagebox
 import subprocess 
 import sys 
 import os 
-
+ 
 # Importaciones de nuestros módulos de lógica y conexión.
 from Conexion import ConexionMongoDB # Importa la clase de conexión (para manejar el inicio y errores).
 from Logica import gestor_usuarios # Importa el gestor de usuarios para la autenticación.
@@ -11,22 +11,22 @@ from Logica import gestor_usuarios # Importa el gestor de usuarios para la auten
 class AppLogin:
     """Clase para la ventana de Inicio de Sesión."""
     def __init__(self, raiz):
-        self.raiz = raiz # Almacena la ventana principal de Tkinter.
+        self.raiz = raiz # Almacena la ventana principal.
         self.raiz.title("Inicio de Sesión de Usuario")
         self.raiz.geometry("400x350")
-        self.raiz.resizable(False, False) # Evita que la ventana se redimensione.
+        self.raiz.resizable(False, False) 
         
         # --- Manejo de Conexión ---
         # Inicializa la conexión. Si la conexión a MongoDB falla, llama a raiz.quit() 
-        # para cerrar la aplicación de manera segura, mostrando un error de Tkinter.
+        # para cerrar la aplicación de manera segura, mostrando un error.
         self.conn_db = ConexionMongoDB(raiz=self.raiz) 
 
-        # Carga inicial de datos de usuarios (necesario para el gestor de usuarios).
+        # Carga inicial de datos de usuarios.
         gestor_usuarios.cargar_mapa()
 
         # --- Configuración y Creación de la Interfaz ---
-        ctk.set_appearance_mode("dark") # Establece el tema oscuro.
-        ctk.set_default_color_theme("blue") # Establece el color de acento azul.
+        ctk.set_appearance_mode("dark") 
+        ctk.set_default_color_theme("blue") 
         
         # Frame principal que contiene todos los widgets del login.
         frame_principal = ctk.CTkFrame(master=self.raiz, corner_radius=10)

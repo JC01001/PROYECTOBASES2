@@ -72,7 +72,7 @@ class GestorEntidad:
         try:
             resultado = self.coleccion.delete_one({"_id": id_objeto})
             self.cargar_mapa() # Recarga el mapa para eliminar la referencia del elemento borrado.
-            return resultado.deleted_count # Retorna cuántos documentos fueron eliminados (debería ser 1 o 0).
+            return resultado.deleted_count # Retorna cuántos documentos fueron eliminados.
         except Exception as e:
             print(f"Error eliminando el documento en {self.coleccion.name}: {e}")
             return 0

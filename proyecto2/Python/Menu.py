@@ -289,13 +289,6 @@ class AppMenuPrincipal:
             entrada_titulo.insert(0, articulo.get("title", ""))
             caja_texto.insert("1.0", articulo.get("text", ""))
             
-            # Se necesita un método auxiliar en Logica.py para obtener el nombre (email) a partir del ID.
-            # (Este método no está en el código base, pero es necesario para que funcione la edición del autor).
-            # Asumiendo que existe:
-            # nombre_autor = user_manager.obtener_nombre_por_id(articulo.get("user_id")) 
-            # if nombre_autor:
-            #    menu_opciones_usuario.set(nombre_autor)
-            
             # Marcar checkboxes iniciales.
             self._marcar_valores_iniciales(mapa_vars_categoria, articulo.get("categories", []))
             self._marcar_valores_iniciales(mapa_vars_tag, articulo.get("tags", []))
@@ -348,13 +341,6 @@ class AppMenuPrincipal:
         # Lógica para guardar el nuevo comentario
         def agregar_comentario_action():
             texto = entrada_comentario.get()
-            # NOTA: Debes tener el ID del usuario LOGUEADO globalmente.
-            # Por ahora, usaremos un ID de usuario por defecto (el ID del autor del artículo)
-            # o, idealmente, el ID de un usuario que guardaste al hacer login.
-            
-            # --- CAMBIAR ESTO: Asumiremos que el usuario logueado es el autor del artículo ---
-            # DEBES REEMPLAZAR 'articulo.get("user_id")' por una variable global
-            # que guarde el ID del usuario que hizo login.
             id_usuario_actual = articulo.get("user_id") 
 
             if not texto:
@@ -468,9 +454,6 @@ class AppMenuPrincipal:
         
         ctk.CTkLabel(frame, text=f"Gestión de {titulo}", font=("Arial", 20, "bold")).pack(pady=10)
         
-        # ... [El resto de la construcción de widgets genéricos es similar a create_article_frame] ...
-        # (Se omite por brevedad en los comentarios, pero sigue la misma lógica).
-
         # Controles (Crear)
         frame_crear = ctk.CTkFrame(frame)
         frame_crear.pack(pady=5, padx=10, fill="x")

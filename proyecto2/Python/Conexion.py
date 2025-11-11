@@ -14,7 +14,7 @@ class ConexionMongoDB:
     def __init__(self, raiz=None):
         """
         Inicializa la conexión.
-        'raiz' es un parámetro opcional (una ventana de Tkinter) para manejar 
+        'raiz' es un parámetro opcional para manejar 
         errores de conexión de forma gráfica. Si se proporciona, muestra un error y sale de la app.
         """
         self.cliente = None # Inicializa el cliente de MongoDB a None.
@@ -35,12 +35,11 @@ class ConexionMongoDB:
             print(error_msg)
             
             if raiz:
-                # Si se llamó desde una GUI (ej: Login.py), muestra una advertencia gráfica.
+                # Si se llamó desde una, muestra una advertencia gráfica.
                 messagebox.showerror("Error de Conexión", error_msg)
                 # Sale de la aplicación de la GUI.
                 raiz.quit()
             else:
-                # Si no hay GUI (ej: se importa en Logica.py), sale del script con un código de error.
                 sys.exit(1)
 
     def obtener_db(self):
@@ -55,6 +54,6 @@ try:
     # Almacena el objeto de la base de datos en la variable global DB.
     DB = gestor_db.obtener_db()
 except:
-    # Si la conexión falla (y no se proporcionó una raíz de GUI), DB se establece a None.
+    # Si la conexión falla, DB se establece a None.
     # Esto es manejado por los gestores en Logica.py.
     DB = None
