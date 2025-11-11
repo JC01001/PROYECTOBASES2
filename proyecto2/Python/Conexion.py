@@ -3,10 +3,10 @@ from tkinter import messagebox
 import sys 
 
 # --- Configuración de la Conexión ---
-# Define la URL de conexión al servidor de MongoDB (por defecto: localhost:27017).
-MONGO_URL = "mongodb://localhost:27017/" 
+# Define la URL de conexión al servidor de MongoDB (AHORA APUNTA A ATLAS).
+MONGO_URL = "mongodb+srv://a368027_db_user:GGGGP66SFFThwerU@proyecto2bdii.tjc6oij.mongodb.net/Proyecto2BDII?retryWrites=true&w=majority" 
 # Define el nombre de la base de datos que se va a utilizar.
-DB_NAME = "Blog_Recetas"
+DB_NAME = "Proyecto"
 
 class ConexionMongoDB:
     """Clase para gestionar la conexión a MongoDB y el objeto de la base de datos."""
